@@ -15,6 +15,7 @@ import torch.nn.functional as F
 from torch import nn
 import cvxpy as cp
 
+np.random.seed(1634)
 
 @dataclass
 class FixedLengthModelArgs:
@@ -23,8 +24,6 @@ class FixedLengthModelArgs:
     v_nt: int=152
     d_input: int=64
     d_hidden: int=128
-    d_output: int=64
-
 
 @dataclass
 class TFMModelArgs:
@@ -42,6 +41,8 @@ class TFMModelArgs:
     max_seq_len: int = 2048
     dropout: float = 0.0
     pos_enc: str = "rope"
+    if_ar: bool = False
+    if_extra_ln: int = None
 
 
 class RMSNorm(torch.nn.Module):
@@ -120,7 +121,7 @@ class Attention(nn.Module):
         self.n_local_heads = args.n_heads // model_parallel_size
         self.n_local_kv_heads = self.n_kv_heads // model_parallel_size
         self.n_rep = self.n_local_heads // self.n_local_kv_heads
-        self.head_dim = args.dim // args.n_heads
+        self.head_dim = (args.dim // args.n_heads //2)*2
         self.wq = nn.Linear(args.dim, args.n_heads * self.head_dim, bias=False)
         self.wk = nn.Linear(args.dim, self.n_kv_heads * self.head_dim, bias=False)
         self.wv = nn.Linear(args.dim, self.n_kv_heads * self.head_dim, bias=False)
@@ -154,7 +155,7 @@ class Attention(nn.Module):
 
         # RoPE relative positional embeddings
         if self.pos_enc == "rope":
-            print(self.pos_enc)
+            # print(self.pos_enc)
             xq, xk = apply_rotary_emb(xq, xk, freqs_cos, freqs_sin)
 
         # grouped multiquery attention: expand out keys and values
@@ -220,6 +221,8 @@ class TransformerBlock(nn.Module):
         self.attention_norm = RMSNorm(args.dim, eps=args.norm_eps)
         self.ffn_norm = RMSNorm(args.dim, eps=args.norm_eps)
 
+
+
     def forward(self, x, freqs_cos, freqs_sin):
         h = x + self.attention.forward(self.attention_norm(x), freqs_cos, freqs_sin)
         out = h + self.feed_forward.forward(self.ffn_norm(h))
@@ -236,14 +239,22 @@ class Transformer(nn.Module):
         self.v_nt = params.v_nt
         self.v_ctx = params.v_ctx
         self.n_layers = params.n_layers
+        self.if_ar = params.if_ar
 
         self.tok_embeddings = nn.Embedding(params.v_ctx, params.dim)
         self.dropout = nn.Dropout(params.dropout)
         self.layers = torch.nn.ModuleList()
+        self.if_extra_ln = params.if_extra_ln
         for layer_id in range(params.n_layers):
             self.layers.append(TransformerBlock(layer_id, params))
-        self.norm = RMSNorm(params.dim, eps=params.norm_eps)
-        self.output = nn.Linear(params.dim, params.v_nt, bias=False)
+
+        if params.if_extra_ln is not None:
+            self.pre_output = nn.Linear(params.dim, params.if_extra_ln, bias=False)
+            self.norm = RMSNorm(params.if_extra_ln, eps=params.norm_eps)
+            self.output = nn.Linear(params.if_extra_ln, params.v_nt, bias=False)
+        else:
+            self.norm = RMSNorm(params.dim, eps=params.norm_eps)
+            self.output = nn.Linear(params.dim, params.v_nt, bias=False)
 
         # share the unembedding parameters with the embedding parameters
         #self.tok_embeddings.weight = self.output.weight # https://paperswithcode.com/method/weight-tying
@@ -262,6 +273,11 @@ class Transformer(nn.Module):
 
         # Initialize attribute for the loss of the last forward call. This will be set if the forward is called with a targets tensor.
         self.last_loss = None
+        self.positionwise_loss = None
+
+        self.name = f"{self.n_layers} layer Transformer pos {self.params.pos_enc}"
+
+        self.last_emb = None
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
@@ -280,14 +296,27 @@ class Transformer(nn.Module):
 
         for layer in self.layers:
             h = layer(h, freqs_cos, freqs_sin)
+        if self.if_extra_ln is not None:
+            h = self.pre_output(h)
         h = self.norm(h)
 
+        # self.last_emb = h
+
         # if we are given some desired targets also calculate the loss
-        output = torch.squeeze(h[:, [-1], :])
-        logits = self.output(output)
-        #logits_last = logits
-        #self.last_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
-        self.last_loss = F.cross_entropy(logits, targets)
+        if self.if_ar:
+            logits = self.output(h)
+            # get loss at each position
+            non_reduction_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1, reduction="none")
+            # dimension of non_reduction_loss is (bsz*seqlen)
+            self.positionwise_loss = non_reduction_loss.view(targets.size()).sum(dim=0)
+            # dimension of positionwise_loss is (seqlen)
+            self.last_loss = self.positionwise_loss.sum()
+        else:
+            embeds = torch.squeeze(h[:, [-1], :])
+            logits = self.output(embeds)
+            #logits_last = logits
+            #self.last_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+            self.last_loss = F.cross_entropy(logits, targets, reduction='sum')
 
 
         return logits
@@ -334,7 +363,7 @@ class Transformer(nn.Module):
         mfu = flops_achieved / flops_promised
         return mfu
 
-    def get_embeddings(self, tokens: torch.Tensor, v_ctx2v):
+    def get_embeddings(self, tokens: torch.Tensor, v_ctx2v, id_ctx_dict):
         _bsz, seqlen = tokens.shape
         h = self.tok_embeddings(tokens)
         h = self.dropout(h)
@@ -343,18 +372,23 @@ class Transformer(nn.Module):
 
         for layer in self.layers:
             h = layer(h, freqs_cos, freqs_sin)
+        if self.if_extra_ln is not None:
+            h = self.pre_output(h)
         h = self.norm(h)
         embed = torch.squeeze(h[:, [-1], :])
         emb_dict = dict()
 
-        for i in range(embed.shape[0]):
-            tokens_in_v = v_ctx2v[tokens[i]]
-            token_byte = tokens_in_v.astype(np.uint16).tobytes()
-            emb_dict[token_byte] = embed[i].cpu().detach().numpy()
+        for k, id_ctx in id_ctx_dict.items():
+            emb_dict[k] = embed[id_ctx["id"]].cpu().detach().numpy()
+
+        # for i in range(embed.shape[0]):
+        #     tokens_in_v = v_ctx2v[tokens[i]]
+        #     token_byte = tokens_in_v.astype(np.uint16).tobytes()
+        #     emb_dict[token_byte] = embed[i].cpu().detach().numpy()
 
         return emb_dict
 
-    def forward_embedding(self, tokens):
+    def forward_embedding(self, tokens, t=-1):
         _bsz, seqlen = tokens.shape
         h = self.tok_embeddings(tokens)
         h = self.dropout(h)
@@ -364,7 +398,8 @@ class Transformer(nn.Module):
         for layer in self.layers:
             h = layer(h, freqs_cos, freqs_sin)
         h = self.norm(h)
-        embed = torch.squeeze(h[:, [-1], :])
+
+        embed = torch.squeeze(h[:, [t], :])
 
         return embed
 
@@ -385,18 +420,29 @@ class MLP(nn.Module):
 class FixedLengthMLP(nn.Module):
     last_loss: Optional[torch.Tensor]
 
-    def __init__(self, T, v_ctx, v_nt, d_input, d_hidden, d_output):
+    def __init__(self, T, v_ctx, v_nt, d_input, d_hiddens, norm_eps=1e-5):
         super().__init__()
-        self.d_input, self.d_hidden, self.d_output = d_input, d_hidden, d_output
+        self.name = "FixedLMLP"
+        self.d_input, self.d_hiddens = d_input, d_hiddens
+
+        self.layers = nn.ModuleList()
 
         self.tok_embeddings = nn.Embedding(v_ctx, d_input)
         #self.mlp = MLP(input_size=d_input, hidden_size=d_hidden, output_size=d_output)
-        self.output = nn.Linear(d_output, v_nt, bias=False)
+        # self.output = nn.Linear(d_output, v_nt, bias=False)
         self.apply(self._init_weights)
 
-        self.fc1 = nn.Linear(d_input*(T-1), d_hidden)
-        self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(d_hidden, d_output)
+        current_size = self.d_input * (T-1)
+
+        for size in self.d_hiddens:
+            self.layers.append(nn.Linear(current_size, size))
+            self.layers.append(RMSNorm(size, eps=norm_eps))
+            current_size = size
+
+        self.output = nn.Linear(current_size, v_nt)
+        self.norm = RMSNorm(current_size, eps=norm_eps)
+
+        self.last_emb = None
 
 
     def _init_weights(self, module):
@@ -407,61 +453,50 @@ class FixedLengthMLP(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, tokens: torch.Tensor, targets: Optional[torch.Tensor] = None) -> torch.Tensor:
-        bsz, seqlen = tokens.shape
-        vecs = self.tok_embeddings(tokens)
-        #embs = self.mlp(self.d_input, self.d_hidden, self.d_output)
-        vecs_2d = vecs.reshape(vecs.shape[0], -1)
-        embed = self.fc1(vecs_2d)
-        embed = self.relu(embed)
-        embed = self.fc2(embed)
+    def forward(self, tokens, y):
 
-        logits = self.output(embed)
+        h = self.tok_embeddings(tokens)
+        # Forward pass through each layer
+        h = h.reshape(h.shape[0], -1)
+        for layer in self.layers:
+            h = F.relu(layer(h))  # Using ReLU activation for hidden layers
+            # h = self.norm(h)
 
-        #comput cross entropy
-        #temp_loss = F.cross_entropy(logits, targets, reduction="none")
-        # self.last_loss = F.cross_entropy(logits, targets, reduction="sum")/bsz
-        self.last_loss = F.cross_entropy(logits, targets)
+        # embeds = self.norm(h)
+        embeds = h
+        # Output layer - no activation; logits are returned
+        logits = self.output(embeds)
 
-        def log_softmax(x):
-            return x - x.exp().sum(-1).log().unsqueeze(-1)
-        def nll(input, target):
-            return -input[range(target.shape[0]), target].mean()
+        self.last_loss = F.cross_entropy(logits, y, reduction='sum')
 
-        pred = log_softmax(logits.to(torch.float64))
-        # pred = F.log_softmax(logits)
-        ce_loss = nll(pred, targets)
-        if math.isinf(ce_loss):
-            print('loss value unstable', ce_loss.item())
-            self.last_loss = torch.tensor(-1)
-        #print(ce_loss.item())
+        return logits
 
-    def get_embeddings(self, tokens: torch.Tensor, v_ctx2v):
-        bsz, seqlen = tokens.shape
-        vecs = self.tok_embeddings(tokens)
-        # embs = self.mlp(self.d_input, self.d_hidden, self.d_output)
-        vecs_2d = vecs.reshape(vecs.shape[0], -1)
-        embed = self.fc1(vecs_2d)
-        embed = self.relu(embed)
-        embed = self.fc2(embed)
-        emb_dict = dict()
-
-        for i in range(embed.shape[0]):
-            tokens_in_v = v_ctx2v[tokens[i]]
-            token_byte = tokens_in_v.astype(np.uint16).tobytes()
-            emb_dict[token_byte] = embed[i].cpu().detach().numpy()
-
-        return emb_dict
+    # def get_embeddings(self, tokens: torch.Tensor, v_ctx2v, id_ctx_dict):
+    #     h = self.tok_embeddings(tokens)
+    #     h = h.reshape(h.shape[0], -1)
+    #     # Forward pass through each layer
+    #     for layer in self.layers:
+    #         h = self.norm(h)
+    #
+    #         # embeds = self.norm(h)
+    #     embeds = h
+    #     # Output layer - no activation; logits are returned
+    #     logits = self.output(embeds)
+    #
+    #     return logits
 
     def forward_embedding(self, tokens):
-        vecs = self.tok_embeddings(tokens)
-        # embs = self.mlp(self.d_input, self.d_hidden, self.d_output)
-        vecs_2d = vecs.reshape(vecs.shape[0], -1)
-        embed = self.fc1(vecs_2d)
-        embed = self.relu(embed)
-        embed = self.fc2(embed)
+        h = self.tok_embeddings(tokens)
+        h = h.reshape(h.shape[0], -1)
+        # Forward pass through each layer
+        for layer in self.layers:
+            h = F.relu(layer(h))  # Using ReLU activation for hidden layers
+            # h = self.norm(h)
 
-        return embed
+        # embeds = self.norm(h)
+        embeds = h
+
+        return embeds
 
 class MultiLabelSVM(nn.Module):
     def __init__(self, emb_dict, support_dict, prob_dict, d, v_nt):
@@ -543,11 +578,50 @@ class MultiLabelSVM(nn.Module):
         #             if z_ == z:
         #                 continue
         #             elif z_ in s_s[j]:
-        #                 check_list.append(abs((W_star[z] - W_star[z_]).T@(h_s[j])) <= 1e-10)
+        #                 chewck_list.append(abs((W_star[z] - W_star[z_]).T@(h_s[j])) <= 1e-10)
         #             else:
         #                 check_list.append((W_star[z] - W_star[z_]).T@(h_s[j]) > 1)
 
         return W_star
+
+# define network
+class UFM(nn.Module):
+    last_loss: Optional[torch.Tensor]
+    def __init__(self, m, d, k):
+        super(UFM, self).__init__()
+        self.name = "UFM"
+        self.m = m
+        self.l1 = nn.Linear(m, d, bias=False)
+        self.output = nn.Linear(d, k, bias=False)
+        # self.double()
+        self.last_emb = None
+
+    def forward(self, x, y, return_embed = False):
+        embeds = self.l1(x)
+        # self.last_emb = embeds
+        logits = self.output(embeds)
+
+        self.last_loss = F.cross_entropy(logits, y, reduction='sum')
+
+        if return_embed:
+            return embeds, logits
+
+        return logits
+
+    def forward_embedding(self, x):
+        embeds = self.l1(x)
+
+        return embeds
+
+    def get_embeddings(self, id_ctx_dict):
+        tokens = torch.from_numpy(np.eye(self.m)).float()
+        embeds = self.l1(tokens)
+
+        emb_dict = {}
+        for k, id_ctx in id_ctx_dict.items():
+            emb_dict[k] = embeds[id_ctx["id"]].cpu().detach().numpy()
+        return emb_dict
+
 
 
 

@@ -1,8 +1,21 @@
 import sentencepiece as spm
 from tokenizer import Tokenizer
 import string
+import numpy as np
 
-model_file='./tokenizer/tok152.model'
+S = np.array([[1, 1, 0, 0], [0, 0, 0, 0], [0, 1, 1, 0]])
+ST = S.T
+
+print(f"S @ ST: {S @ ST}")
+print(f"ST @ S: {ST @ S}")
+print(f"S @ ST @ S @ ST: {S @ ST @ S @ ST}")
+print(f"ST @ S @ ST @ S: {ST @ S @ ST @ S}")
+
+# P = np.load(f'./results_tiny_extract_m404_2/P_UFM.npy')
+#
+# print(P.shape)
+exit(0)
+model_file='./tokenizer/tok_tiny_2000lines_char.model'
 vocab_file = './tokenizer/tok152.vocab'
 sp = spm.SentencePieceProcessor(model_file=model_file)
 vocabs = [sp.id_to_piece(id) for id in range(sp.get_piece_size())]
@@ -14,16 +27,16 @@ for i in range(sp.get_piece_size()):
 #
 # print(fileContent)
 
-data_file = "./verysmallset.txt"
-t = Tokenizer(model_file)
-with open(data_file, "r") as f:
-    text = f.read().lower().translate(str.maketrans('', '', string.punctuation))
-    text = text.replace('\n', ' .\n')
-    encoded = t.encode(text,bos=True, eos=True)
-
-tokens = [sp.IdToPiece(id_) for id_ in encoded]
-print(tokens)
-
+# data_file = "./verysmallset.txt"
+# t = Tokenizer(model_file)
+# with open(data_file, "r") as f:
+#     text = f.read().lower().translate(str.maketrans('', '', string.punctuation))
+#     text = text.replace('\n', ' .\n')
+#     encoded = t.encode(text,bos=True, eos=True)
+#
+# tokens = [sp.IdToPiece(id_) for id_ in encoded]
+# print(tokens)
+#
 
 def spm_export_vocab(model_file, vocab_file = None):
     vocab_dict = {}
