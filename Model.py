@@ -477,12 +477,12 @@ class FixedLengthMLP(nn.Module):
     #     # Forward pass through each layer
     #     for layer in self.layers:
     #         h = self.norm(h)
-    #
+    
     #         # embeds = self.norm(h)
     #     embeds = h
     #     # Output layer - no activation; logits are returned
     #     logits = self.output(embeds)
-    #
+    
     #     return logits
 
     def forward_embedding(self, tokens):
@@ -624,4 +624,75 @@ class UFM(nn.Module):
 
 
 
+#define a LSTM network
+class LSTMModel(nn.Module):
+    def __init__(self, T, v_ctx, v_nt, d_input, d_hiddens, num_layers=2, norm_eps=1e-5):
+        super().__init__()
+        self.name = "LSTM"
+        self.d_input = d_input
+        self.d_hiddens = d_hiddens
+        self.num_layers = num_layers
 
+        # Embedding layer
+        self.tok_embeddings = nn.Embedding(v_ctx, d_input)
+        # LSTM
+        self.lstm = nn.LSTM(input_size=d_input, hidden_size=d_hiddens[0], num_layers=num_layers, batch_first=True)
+        # Output layer: logits
+        self.output = nn.Linear(d_hiddens[0], v_nt)
+        # Normalization 
+        self.norm = RMSNorm(d_hiddens[0], eps=norm_eps)
+
+        # Initialize the weights
+        self.apply(self._init_weights)
+        self.last_emb = None  # Stores the last embeddings
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+    
+    def forward(self, tokens, y=None):
+
+        h = self.tok_embeddings(tokens)
+        # Initialize hidden and cell states with zeros
+        h_0 = torch.zeros(self.num_layers, h.size(0), self.d_hiddens[0]).to(h.device)
+        c_0 = torch.zeros(self.num_layers, h.size(0), self.d_hiddens[0]).to(h.device)
+
+        out, _ = self.lstm(h, (h_0, c_0))
+
+        # Get the last hidden state for each sequence in the batch
+        last_hidden_state = out[:, -1, :]
+        embeds = self.norm(last_hidden_state)
+        self.last_emb = embeds
+
+        logits = self.output(embeds)
+
+        if y is not None:
+            self.last_loss = F.cross_entropy(logits, y, reduction='sum')
+
+        return logits
+
+    def forward_embedding(self, tokens):
+
+        h = self.tok_embeddings(tokens)
+
+        h_0 = torch.zeros(self.num_layers, h.size(0), self.d_hiddens[0]).to(h.device)
+        c_0 = torch.zeros(self.num_layers, h.size(0), self.d_hiddens[0]).to(h.device)
+        out, _ = self.lstm(h, (h_0, c_0))
+
+        last_hidden_state = out[:, -1, :]
+        embeds = self.norm(last_hidden_state)
+        return embeds
+    
+    def get_embeddings(self, tokens: torch.Tensor, v_ctx2v, id_ctx_dict: dict) -> dict:
+        embeddings = self.forward_embedding(tokens)
+
+        emb_dict = {}
+
+        for key, id_ctx in id_ctx_dict.items():
+            emb_dict[key] = embeddings[id_ctx["id"]].cpu().detach().numpy()
+
+        return emb_dict

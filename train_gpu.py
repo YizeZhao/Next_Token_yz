@@ -110,7 +110,7 @@ dim = 64
 lr = 1e-4
 lammy = 1e-6
 #training
-max_iteration = 10000
+max_iteration = 30000
 log_interval = 1000
 
 # if solve_by_cvx:

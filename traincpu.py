@@ -20,7 +20,7 @@ from utils import *
 
 
 import torch
-from Model import Transformer, FixedLengthModelArgs, FixedLengthMLP, MultiLabelSVM, TFMModelArgs, UFM
+from Model import Transformer, FixedLengthModelArgs, FixedLengthMLP, MultiLabelSVM, TFMModelArgs, UFM, LSTMModel
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import StepLR
 
@@ -47,10 +47,10 @@ T = 6
 
 # two supported datasets
 dataset_name = "tiny_extract_m404"
-dataset_name = "verysmallset"
+#dataset_name = "verysmallset"
 
 
-traininf_tag = "_cpu_404_ufm_test1"
+traininf_tag = "_cpu_404_lstm_test1"
 # dataset_name = "tiny_extracted_m100"
 tok_file = f'./data/{dataset_name}_pretok_word.bin'
 # record_dir = "/Users/yizezhao/Documents/Models/NextToken"
@@ -84,11 +84,11 @@ bos = 1
 eos = 2
 
 # model
-init_from = "tfm" # mlp, tfm or ufm
+init_from = "lstm" # mlp, tfm ufm, or lstm
 
 # mlp specific
 d_encode = 128
-d_hidden = 128
+d_hidden = [128]
 d_decode = 128
 
 # tfm specific
@@ -108,7 +108,7 @@ max_seq_len = 6
 lr = 1e-4
 lammy = 1e-6
 #training
-max_iteration = 1001
+max_iteration = 30000
 log_interval = 1000
 
 # if solve_by_cvx:
@@ -167,7 +167,7 @@ if init_from == "mlp":
     # init a new model from scratch
     print("Initializing a new fixed MLP model from scratch")
     #fixedTconf = FixedLengthModelArgs(**model_args)
-    model = FixedLengthMLP(T=T, v_ctx=v_ctx, v_nt=v_nt, d_input=d_encode, d_hidden=d_hidden, d_output=d_decode)
+    model = FixedLengthMLP(T=T, v_ctx=v_ctx, v_nt=v_nt, d_input=d_encode, d_hiddens=d_hidden)
     uniq_emb = tsk.get_unique()
 
 elif init_from == "tfm":
@@ -193,6 +193,12 @@ elif init_from == "ufm":
     print("Initializing a new UFM model from scratch")
     uniq_emb = tsk.get_unique().type(torch.FloatTensor)
     # torch.tensor(np.eye(data_m)).type(torch.FloatTensor)
+elif init_from == "lstm":
+    print("Initializing a new LSTM model")
+    # Initialize the LSTM model
+    model = LSTMModel(T=T, v_ctx=v_ctx, v_nt=v_nt, d_input=d_encode, d_hiddens=d_hidden)
+    uniq_emb = tsk.get_unique()
+
 dummyY = torch.tensor(np.ones(data_m)).type(torch.LongTensor)
 dummyY = dummyY.to(device)
 uniq_emb = uniq_emb.to(device)
@@ -330,6 +336,17 @@ if retrain:
             # Last_W = This_W
             rec.append(iter_)
             print(f"{iter_} | loss {epoch_loss:.4f} | entropy {tsk_entropy:.4f} ")
+
+            if iter_ == 1000 or iter_ % 5000 == 0:
+                # save W_list, L_list, H_list
+                if not os.path.exists(result_dir):
+                    os.makedirs(result_dir)
+                np.save(f'{result_dir}/W_list_{model.name}_d{dim}_{iter_}.npy', np.array(W_list))
+                np.save(f'{result_dir}/L_list_{model.name}_d{dim}_{iter_}.npy', np.array(L_list))
+                np.save(f'{result_dir}/H_list_{model.name}_d{dim}_{iter_}.npy', np.array(H_list))
+                np.save(f'{result_dir}/losses_{model.name}_d{dim}_{iter_}.npy', losses)
+                np.save(f'{result_dir}/rec_{model.name}_d{dim}_{iter_}.npy', rec)
+
 
     # losses = losses
     W_list = np.array(W_list)

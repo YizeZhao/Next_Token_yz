@@ -24,7 +24,7 @@ import matplotlib.gridspec as gridspec
 
 
 import torch
-from Model import Transformer, FixedLengthModelArgs, FixedLengthMLP, MultiLabelSVM, TFMModelArgs, UFM
+from Model import Transformer, FixedLengthModelArgs, FixedLengthMLP, MultiLabelSVM, TFMModelArgs, UFM, LSTMModel
 import torch.nn.functional as F
 from torch.optim.lr_scheduler import StepLR
 
@@ -59,11 +59,11 @@ dataset_name = "tiny_extract_m404"
 
 # traininf_tag = "_cpu_verysmall_tfm_128_fix_s3"
 # traininf_tag = "_cpu_ufm128_404_sori"
-# model_name = "ufm"
-model_name = "4 layer Transformer pos off"
+model_name = "lstm"
+#model_name = "4 layer Transformer pos off"
 # dataset_name = "tiny_extracted_m100"
 tok_file = f'./data/{dataset_name}_pretok_word.bin'
-record_dir = "/Users/yizezhao/Desktop/ExpPaperV2"
+record_dir = "/Users/Lenovo/Next_Token/cpu_results"
 
 if dataset_name == "verysmallset":
     s_len = 3
@@ -76,22 +76,33 @@ elif dataset_name == "tiny_extract_m404":
     range_repeat = 5
 
 # model
-init_from = "tfm" # mlp, tfm or ufm
+init_from = "lstm" # mlp, tfm or ufm
 
 load_tf404 = True
-load_tfsmall = True
+load_tfsmall = False
 load_ufm404 = True
-load_ufmsmall = True
+load_ufmsmall = False
+load_lstmsmall = False
+load_lstm404 = True
 
 ufm_verysmall_result = f"{record_dir}/results_verysmallset_cpu_verysmall_ufm_128_fix_s3"
 tfm_verysmall_result = f"{record_dir}/results_verysmallset_cpu_verysmall_tfm_128_fix_s3"
 ufm_tiny404_result = f"{record_dir}/results_tiny_extract_m404_cpu_ufm128_404_sori"
-tfm_tiny404_result = f"{record_dir}/results_tiny_extract_m404_colab_tfm128_404_sori"
+# tfm_tiny404_result = f"{record_dir}/results_tiny_extract_m404_colab_tfm128_404_sori"
+tfm_tiny404_result = f"{record_dir}/results_tiny_extract_m404_cpu_404_tfm_test1"
+lstm_tiny404_result = f"{record_dir}/results_tiny_extract_m404_cpu_404_lstm_test1"
+lstm_verysmall_result = f"{record_dir}/results_verysmallset_cpu_404_lstm_test1"
+
 if model_name == "ufm":
     if dataset_name == "verysmallset":
         result_dir = ufm_verysmall_result
     else:
         result_dir = ufm_tiny404_result
+elif model_name == "lstm":
+    if dataset_name == "verysmallset":
+        result_dir = lstm_verysmall_result
+    else:
+        result_dir = lstm_tiny404_result
 else :
     if dataset_name == "verysmallset":
         result_dir = tfm_verysmall_result
@@ -105,7 +116,7 @@ vocab_size = sp.get_piece_size()
 
 # result_dir = ufm_verysmall_result
 
-figure_dir = f'{record_dir}/exp_figures_202406'
+figure_dir = f'{record_dir}/exp_figures_addLSTM'
 if not os.path.exists(result_dir):
     os.makedirs(result_dir)
 if not os.path.exists(figure_dir):
@@ -227,6 +238,13 @@ elif init_from == "ufm":
     print("Initializing a new UFM model from scratch")
     uniq_emb = tsk.get_unique().type(torch.FloatTensor)
     # torch.tensor(np.eye(data_m)).type(torch.FloatTensor)
+
+elif init_from == "lstm":
+    print("Initializing a new LSTM model")
+    # Initialize the LSTM model
+    model = LSTMModel(T=T, v_ctx=v_ctx, v_nt=v_nt, d_input=d_encode, d_hiddens=d_hiddens)
+    uniq_emb = tsk.get_unique()
+
 dummyY = torch.tensor(np.ones(data_m)).type(torch.LongTensor)
 dummyY = dummyY.to(device)
 uniq_emb = uniq_emb.to(device)
@@ -337,6 +355,24 @@ if load_ufmsmall:
     H_list_ufmsmall = np.concatenate((H_list_ufmsmall_1000[0:4,:,:], H_list_ufmsmall[1:,:,:]), axis=0)
     rec_ufmsmall = np.concatenate((np.array([0, 1, 10, 100]), rec_ufmsmall[1:]), axis=0)
 
+if load_lstm404:
+    W_list_lstm404 = np.load(f'{lstm_tiny404_result}/W_list_LSTM_d128.npy')
+    L_list_lstm404 = np.load(f'{lstm_tiny404_result}/L_list_LSTM_d128.npy')
+    H_list_lstm404 = np.load(f'{lstm_tiny404_result}/H_list_LSTM_d128.npy')
+    losses_lstm404 = np.load(f'{lstm_tiny404_result}/losses_LSTM_d128.npy')
+    rec_lstm404 = np.load(f'{lstm_tiny404_result}/rec_LSTM_d128.npy')
+    P_lstm404 = np.load(f'{lstm_tiny404_result}/P_LSTM.npy')
+    S_lstm404 = np.zeros_like(P_tf404)
+    S_lstm404[P_tf404>0] = 1
+
+    W_list_lstm404_1000 = np.load(f'{lstm_tiny404_result}/W_list_LSTM_d128_1000.npy')
+    L_list_lstm404_1000 = np.load(f'{lstm_tiny404_result}/L_list_LSTM_d128_1000.npy')
+    H_list_lstm404_1000 = np.load(f'{lstm_tiny404_result}/H_list_LSTM_d128_1000.npy')
+
+    W_list_lstm404 = np.concatenate((W_list_lstm404_1000[0:4,:,:], W_list_lstm404[1:,:,:]), axis=0)
+    L_list_lstm404 = np.concatenate((L_list_lstm404_1000[0:4,:,:], L_list_lstm404[1:,:,:]), axis=0)
+    H_list_lstm404 = np.concatenate((H_list_lstm404_1000[0:4,:,:], H_list_lstm404[1:,:,:]), axis=0)
+    rec_lstm404 = np.concatenate((np.array([0, 1, 10, 100]), rec_lstm404[1:]), axis=0)
 
 def plot_train():
     nrows, ncols = 2, 1
@@ -370,7 +406,7 @@ def plot_losses():
     tsk_entropy_404 = 1.6597
     tsk_entropy_small = 1.0166
 
-    print(losses_tfsmall[-1])
+    print(losses_lstm404[-1])
     # axs.plot(range(len(losses_ufm404)), losses_ufm404 - tsk_entropy_404,'b--', label='Simplified TinyStories, UFM')
     # axs.plot(range(len(losses_tf404)), losses_tf404 - tsk_entropy_404,'b-', label='Simplified TinyStories, TF')
     # axs.plot(range(len(losses_tfsmall)), losses_tfsmall - tsk_entropy_small, 'r-',label='Synthetic, TF')
@@ -404,9 +440,10 @@ def plot_losses():
     axs.grid()
     axs.plot(range(len(losses_ufm404)), losses_ufm404 - tsk_entropy_404,color='deepskyblue', label='Simplified TinyStories, UFM')
     axs.plot(range(len(losses_tf404)), losses_tf404 - tsk_entropy_404, color='steelblue', label='Simplified TinyStories, TF')
-    axs.plot(range(len(losses_tfsmall)), losses_tfsmall - tsk_entropy_small, color='darkorange',label='Synthetic, TF')
-    axs.plot(range(len(losses_ufmsmall)), losses_ufmsmall - tsk_entropy_small,'gold', label='Synthetic , UFM')
+    #axs.plot(range(len(losses_tfsmall)), losses_tfsmall - tsk_entropy_small, color='darkorange',label='Synthetic, TF')
+    #axs.plot(range(len(losses_ufmsmall)), losses_ufmsmall - tsk_entropy_small,'gold', label='Synthetic , UFM')
     # axs[0].axhline(y=tsk_entropy, color='r', linestyle='--', label='Dataset entropy')
+    axs.plot(range(len(losses_lstm404)), losses_lstm404 - tsk_entropy_404,color='green', label='Simplified TinyStories, LSTM')
 
     # Add labels and legend
     axs.set_xlabel(r'Epoch $k$')
@@ -421,14 +458,16 @@ def plot_losses():
         Line2D([0], [0,1], color='gold',),
         Line2D([0], [0,1], color='darkorange',),
         Line2D([0], [0,1], color='deepskyblue'),
-        Line2D([0], [0,1], color='steelblue')
+        Line2D([0], [0,1], color='steelblue'),
+        Line2D([0], [0,1], color='green')
     ]
 
     custom_labels = [
         'Synthetic, UFM',
         'Synthetic, TF',
         'Simplified TinyStories, UFM',
-        'Simplified TinyStories, TF'
+        'Simplified TinyStories, TF',
+        'Simplified TinyStories, LSTM'
     ]
 
     # plt.legend(custom_lines, custom_labels, title='Legend Title')
@@ -452,14 +491,17 @@ def plot_norms():
     W_norm_tf_404 = np.linalg.norm(W_list_tf404, axis=(1, 2))
     H_norm_tf_404 = np.linalg.norm(H_list_tf404, axis=(1, 2))
 
-    W_norm_tf_small = np.linalg.norm(W_list_tfsmall, axis=(1, 2))
-    H_norm_tf_small = np.linalg.norm(H_list_tfsmall, axis=(1, 2))
+    # W_norm_tf_small = np.linalg.norm(W_list_tfsmall, axis=(1, 2))
+    # H_norm_tf_small = np.linalg.norm(H_list_tfsmall, axis=(1, 2))
 
     W_norm_ufm_404 = np.linalg.norm(W_list_ufm404, axis=(1, 2))
     H_norm_ufm_404 = np.linalg.norm(H_list_ufm404, axis=(1, 2))
 
-    W_norm_ufm_small = np.linalg.norm(W_list_ufmsmall, axis=(1, 2))
-    H_norm_ufm_small = np.linalg.norm(H_list_ufmsmall, axis=(1, 2))
+    # W_norm_ufm_small = np.linalg.norm(W_list_ufmsmall, axis=(1, 2))
+    # H_norm_ufm_small = np.linalg.norm(H_list_ufmsmall, axis=(1, 2))
+
+    W_norm_lstm_404 = np.linalg.norm(W_list_lstm404, axis=(1, 2))
+    H_norm_lstm_404 = np.linalg.norm(H_list_lstm404, axis=(1, 2))
 
     n_small = 72
     n_404 = 5110
@@ -509,12 +551,14 @@ def plot_norms():
     mksz = 5
     axs.plot(rec_tf404+1, W_norm_tf_404, color='steelblue',linestyle='--', label='Simplified TinyStories, TF, ||W_t||')
     axs.plot(rec_tf404+1, H_norm_tf_404, color='steelblue', label='Simplified TinyStories, TF, ||H_t||')
-    axs.plot(rec_tfsmall+1, W_norm_tf_small, color='darkorange',linestyle='--',  label='Synthetic , TF, ||W_t||')
-    axs.plot(rec_tfsmall+1, H_norm_tf_small, color='darkorange', label='Synthetic , TF, ||H_t||')
+    # axs.plot(rec_tfsmall+1, W_norm_tf_small, color='darkorange',linestyle='--',  label='Synthetic , TF, ||W_t||')
+    # axs.plot(rec_tfsmall+1, H_norm_tf_small, color='darkorange', label='Synthetic , TF, ||H_t||')
     axs.plot(rec_ufm404+1, W_norm_ufm_404, color='deepskyblue',linestyle='--', label='Simplified TinyStories, UFM, ||W_t||')
     axs.plot(rec_ufm404+1, H_norm_ufm_404, color='deepskyblue', label='Simplified TinyStories, UFM, ||H_t||')
-    axs.plot(rec_ufmsmall+1, W_norm_ufm_small, color='gold',linestyle='--',label='Synthetic , UFM, ||W_t||')
-    axs.plot(rec_ufmsmall+1, H_norm_ufm_small, color='gold', label='Synthetic , UFM, ||H_t||')
+    # axs.plot(rec_ufmsmall+1, W_norm_ufm_small, color='gold',linestyle='--',label='Synthetic , UFM, ||W_t||')
+    # axs.plot(rec_ufmsmall+1, H_norm_ufm_small, color='gold', label='Synthetic , UFM, ||H_t||')
+    axs.plot(rec_lstm404+1, W_norm_lstm_404, color='green',linestyle='--', label='Simplified TinyStories, LSTM, ||W_t||')
+    axs.plot(rec_lstm404+1, H_norm_lstm_404, color='green', label='Simplified TinyStories, LSTM, ||H_t||')
 
     # axs[0].set_title('Norm')
     axs.set_xlabel(r'Epoch $k$')
@@ -533,6 +577,7 @@ def plot_norms():
         Line2D([0], [0,1], color='darkorange',),
         Line2D([0], [0,1], color='deepskyblue'),
         Line2D([0], [0,1], color='steelblue'),
+        Line2D([0], [0,1], color='green'),
         Line2D([0], [0, 1], color='k', linestyle='-'),
         Line2D([0], [0, 1], color='k', linestyle='--'),
     ]
@@ -542,6 +587,7 @@ def plot_norms():
         'Synthetic, TF',
         'Simplified TinyStories, UFM',
         'Simplified TinyStories, TF',
+        'Simplified TinyStories, LSTM',
         # '||H||',
         # '||W||'
         'H',
@@ -647,6 +693,8 @@ def plot_L_proj_L_fin_diff():
     L_proj_L_fin_diff_tfsmall = project_Lt(P_tfsmall, S_tfsmall, L_list_tfsmall, L_fin_tfsmall)
     L_proj_L_fin_diff_ufm404 = project_Lt(P_tf404, S_tf404, L_list_ufm404, L_fin_tf404)
     L_proj_L_fin_diff_ufmsmall = project_Lt(P_tfsmall, S_tfsmall, L_list_ufmsmall, L_fin_tfsmall)
+    L_proj_L_fin_diff_lstm404 = project_Lt(P_tf404, S_tf404, L_list_lstm404, L_fin_tf404)
+    #L_proj_L_fin_diff_lstmsmall = project_Lt(P_tfsmall, S_tfsmall, L_list_lstmsmall, L_fin_tfsmall)
 
     # plot all four L_proj_L_fin_diff
     nrows, ncols = 1, 1
@@ -681,7 +729,7 @@ def plot_L_proj_L_fin_diff():
     axs.plot(rec_tfsmall, L_proj_L_fin_diff_tfsmall, color='darkorange', label='Synthetic, TF')
     axs.plot(rec_ufm404, L_proj_L_fin_diff_ufm404,  color='deepskyblue', label='Simplified TinyStories, UFM')
     axs.plot(rec_ufmsmall, L_proj_L_fin_diff_ufmsmall, color='gold', label='Synthetic, UFM')
-
+    axs.plot(rec_lstm404, L_proj_L_fin_diff_lstm404,  color='green', label='Simplified TinyStories, LSTN')
     # Add labels and legend
     axs.set_xlabel(r'Epoch $k$')
     # axs.set_ylabel('||L_t - L_fin||')
@@ -693,14 +741,16 @@ def plot_L_proj_L_fin_diff():
         Line2D([0], [0, 1], color='gold', ),
         Line2D([0], [0, 1], color='darkorange', ),
         Line2D([0], [0, 1], color='deepskyblue'),
-        Line2D([0], [0, 1], color='steelblue')
+        Line2D([0], [0, 1], color='steelblue'),
+        Line2D([0], [0, 1], color='green')
     ]
 
     custom_labels = [
         'Synthetic, UFM',
         'Synthetic, TF',
         'Simplified TinyStories, UFM',
-        'Simplified TinyStories, TF'
+        'Simplified TinyStories, TF',
+        'Simplified TinyStories, LSTM'
     ]
     plt.legend(custom_lines, custom_labels)
     # Show the plot
@@ -756,7 +806,7 @@ def plot_logits_verysmallsets():
         f'{ufm_verysmall_result}/L_list_UFM_d128.npy')
     L_list_tfm = np.load(
         f'{tfm_verysmall_result}/L_list_4 layer Transformer pos off_d128.npy')
-    # rec = np.load(f'/Users/yizezhao/Desktop/ExpPaperV1/results_tiny_extract_m404_cpu_ufm128_404_sori/rec_UFM_d128.npy')
+    # rec = np.load(f'/Users/Lenovo/Next_Token/ExpPaperV1/results_tiny_extract_m404_cpu_ufm128_404_sori/rec_UFM_d128.npy')
     L_ufm = L_list_ufm[-1]
     L_ufm_normed = L_ufm / np.linalg.norm(L_ufm)
     L_tfm = L_list_tfm[-1]
@@ -831,11 +881,15 @@ def plot_logits_tiny404():
         f'{ufm_tiny404_result}/L_list_UFM_d128.npy')
     L_list_tfm = np.load(
         f'{tfm_tiny404_result}/L_list_4 layer Transformer pos off_d128.npy')
-    # rec = np.load(f'/Users/yizezhao/Desktop/ExpPaperV1/results_tiny_extract_m404_cpu_ufm128_404_sori/rec_UFM_d128.npy')
+    L_list_lstm = np.load(
+        f'{lstm_tiny404_result}/L_list_LSTM_d128.npy')
+    # rec = np.load(f'/Users/Lenovo/Next_Token/ExpPaperV1/results_tiny_extract_m404_cpu_ufm128_404_sori/rec_UFM_d128.npy')
     L_ufm = L_list_ufm[-1]
     L_ufm_normed = L_ufm / np.linalg.norm(L_ufm)
     L_tfm = L_list_tfm[-1]
     L_tfm_normed = L_tfm / np.linalg.norm(L_tfm)
+    L_lstm = L_list_lstm[-1]
+    L_lstm_normed = L_ufm / np.linalg.norm(L_lstm)
     # imshow L_ufm, L_tfm and L_mm_cvxpy on the same colorbar
     # color_max = np.max([np.max(L_ufm_normed), np.max(L_tfm_normed), np.max(L_mm_cvxpy_normed)])
     # color_min = np.min([np.min(L_ufm_normed), np.min(L_tfm_normed), np.min(L_mm_cvxpy_normed)])
@@ -868,10 +922,21 @@ def plot_logits_tiny404():
     plt.savefig(f'{figure_dir}/L_tfm_tiny404.pdf')
 
     fig, axs = plt.subplots(nrows, ncols, dpi=100)
-    im3 = axs.imshow(Lmm_data_normed.T, cmap='hot', interpolation='nearest')
+    im3 = axs.imshow(L_lstm_normed.T, cmap='hot', interpolation='nearest')
     # axs.set_title('L_mm_cvxpy')
     # fig.subplots_adjust(wspace=0.5, hspace=0.5)
     plt.colorbar(im3)
+    plt.gca().set_axis_off()
+    plt.subplots_adjust(top=1, bottom=0, right=1, left=0,
+                        hspace=0, wspace=0)
+    plt.margins(0, 0)
+    plt.savefig(f'{figure_dir}/L_lstm_tiny404.pdf')
+
+    fig, axs = plt.subplots(nrows, ncols, dpi=100)
+    im4 = axs.imshow(Lmm_data_normed.T, cmap='hot', interpolation='nearest')
+    # axs.set_title('L_mm_cvxpy')
+    # fig.subplots_adjust(wspace=0.5, hspace=0.5)
+    plt.colorbar(im4)
     plt.gca().set_axis_off()
     plt.subplots_adjust(top=1, bottom=0, right=1, left=0,
                         hspace=0, wspace=0)
@@ -2005,7 +2070,7 @@ def compute_structural_component(x, y):
     structural_component = (sigma_xy + C) / (sigma_x * sigma_y + C)
     return structural_component
 
-corr_dir = "/Users/yizezhao/Desktop/rebuttal/corr"
+corr_dir = "/Users/Lenovo/Next_Token/rebuttal/corr"
 
 GHmm_GS_corr = compute_structural_component(HG_mm_thm, S@S.T)
 GWmm_GS_corr = compute_structural_component(WG_mm_thm, S.T@S)
@@ -2507,9 +2572,9 @@ save_gwh_glmm_structural_corr()
 # save_H_S_gram_structual_corr()
 def plot_hg_structual_corr_bothdatasets():
     # load the structure_corr
-    structure_corr_404 = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/structure_corr_hg_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
-    rec = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/rectemp_w_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
-    structure_corr_small = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/structure_corr_hg_verysmallset_4 layer Transformer pos off_d128.npy')
+    structure_corr_404 = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/structure_corr_hg_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
+    rec = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/rectemp_w_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
+    structure_corr_small = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/structure_corr_hg_verysmallset_4 layer Transformer pos off_d128.npy')
     # plot the curves
     plt.figure(figsize=(8, 4))
     plt.plot(rec, np.array(structure_corr_404), label='Synthetic data from TinyStories')
@@ -2527,9 +2592,9 @@ def plot_hg_structual_corr_bothdatasets():
 
 def plot_wg_structual_corr_bothdatasets():
     # load the structure_corr
-    structure_corr_404 = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/structure_corr_wg_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
-    rec = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/rectemp_w_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
-    structure_corr_small = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/structure_corr_wg_verysmallset_4 layer Transformer pos off_d128.npy')
+    structure_corr_404 = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/structure_corr_wg_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
+    rec = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/rectemp_w_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
+    structure_corr_small = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/structure_corr_wg_verysmallset_4 layer Transformer pos off_d128.npy')
     # plot the curves
     plt.figure(figsize=(8, 4))
     plt.plot(rec, np.array(structure_corr_404), label='Synthetic data from TinyStories')
@@ -2546,9 +2611,9 @@ def plot_wg_structual_corr_bothdatasets():
 
 def plot_hglmm_structual_corr_bothdatasets():
     # load the structure_corr
-    structure_corr_404 = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/structure_corr_ghlmm_sim_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
-    rec = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/rectemp_w_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
-    structure_corr_small = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/structure_corr_ghlmm_sim_verysmallset_4 layer Transformer pos off_d128.npy')
+    structure_corr_404 = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/structure_corr_ghlmm_sim_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
+    rec = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/rectemp_w_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
+    structure_corr_small = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/structure_corr_ghlmm_sim_verysmallset_4 layer Transformer pos off_d128.npy')
     # plot the curves
     plt.figure(figsize=(8, 4))
     plt.plot(rec, np.array(structure_corr_404), label='Synthetic data from TinyStories')
@@ -2565,9 +2630,9 @@ def plot_hglmm_structual_corr_bothdatasets():
 
 def plot_wglmm_structual_corr_bothdatasets():
     # load the structure_corr
-    structure_corr_404 = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/structure_corr_gwlmm_sim_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
-    rec = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/rectemp_w_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
-    structure_corr_small = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/structure_corr_gwlmm_sim_verysmallset_4 layer Transformer pos off_d128.npy')
+    structure_corr_404 = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/structure_corr_gwlmm_sim_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
+    rec = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/rectemp_w_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
+    structure_corr_small = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/structure_corr_gwlmm_sim_verysmallset_4 layer Transformer pos off_d128.npy')
     # plot the curves
     plt.figure(figsize=(8, 4))
     plt.plot(rec, np.array(structure_corr_404), label='Synthetic data from TinyStories')
@@ -2587,9 +2652,9 @@ def plot_wglmm_structual_corr_bothdatasets():
 def plot_H_S_sim_structual_corr_bothdatasets():
 
     # load the structure_corr
-    structure_corr_404 = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/structure_corr_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
-    rec = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/rectemp_verysmallset_4 layer Transformer pos off_d128.npy')
-    structure_corr_small = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/structure_corr_verysmallset_4 layer Transformer pos off_d128.npy')
+    structure_corr_404 = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/structure_corr_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
+    rec = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/rectemp_verysmallset_4 layer Transformer pos off_d128.npy')
+    structure_corr_small = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/structure_corr_verysmallset_4 layer Transformer pos off_d128.npy')
     # plot the curves
     plt.figure(figsize=(8, 4))
     plt.plot(rec, np.array(structure_corr_404), label='Synthetic data from TinyStories')
@@ -2610,9 +2675,9 @@ def plot_H_S_sim_structual_corr_bothdatasets():
 def plot_W_S_sim_structual_corr_bothdatasets():
 
     # load the structure_corr
-    structure_corr_404 = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/structure_corr_w_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
-    rec = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/rectemp_w_verysmallset_4 layer Transformer pos off_d128.npy')
-    structure_corr_small = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/structure_corr_w_verysmallset_4 layer Transformer pos off_d128.npy')
+    structure_corr_404 = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/structure_corr_w_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
+    rec = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/rectemp_w_verysmallset_4 layer Transformer pos off_d128.npy')
+    structure_corr_small = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/structure_corr_w_verysmallset_4 layer Transformer pos off_d128.npy')
     # plot the curves
     plt.figure(figsize=(8, 4))
     plt.plot(rec, np.array(structure_corr_404), label='Synthetic data from TinyStories')
@@ -2633,9 +2698,9 @@ def plot_W_S_sim_structual_corr_bothdatasets():
 def plot_gw_sqrtlmm_structural_corr_bothdatasets():
 
     # load the structure_corr
-    structure_corr_404 = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/structure_corr_gw_sqrtlmm_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
-    rec = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/rectemp_w_verysmallset_4 layer Transformer pos off_d128.npy')
-    structure_corr_small = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/structure_corr_gw_sqrtlmm_verysmallset_4 layer Transformer pos off_d128.npy')
+    structure_corr_404 = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/structure_corr_gw_sqrtlmm_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
+    rec = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/rectemp_w_verysmallset_4 layer Transformer pos off_d128.npy')
+    structure_corr_small = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/structure_corr_gw_sqrtlmm_verysmallset_4 layer Transformer pos off_d128.npy')
     # plot the curves
     plt.figure(figsize=(8, 4))
     plt.plot(rec, np.array(structure_corr_404), label='Synthetic data from TinyStories')
@@ -2654,9 +2719,9 @@ def plot_gw_sqrtlmm_structural_corr_bothdatasets():
 def plot_gh_sqrtlmm_structural_corr_bothdatasets():
 
         # load the structure_corr
-        structure_corr_404 = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/structure_corr_gh_sqrtlmm_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
-        rec = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/rectemp_w_verysmallset_4 layer Transformer pos off_d128.npy')
-        structure_corr_small = np.load(f'/Users/yizezhao/Desktop/rebuttal/corr/structure_corr_gh_sqrtlmm_verysmallset_4 layer Transformer pos off_d128.npy')
+        structure_corr_404 = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/structure_corr_gh_sqrtlmm_tiny_extract_m404_4 layer Transformer pos off_d128.npy')
+        rec = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/rectemp_w_verysmallset_4 layer Transformer pos off_d128.npy')
+        structure_corr_small = np.load(f'/Users/Lenovo/Next_Token/rebuttal/corr/structure_corr_gh_sqrtlmm_verysmallset_4 layer Transformer pos off_d128.npy')
         # plot the curves
         plt.figure(figsize=(8, 4))
         plt.plot(rec, np.array(structure_corr_404), label='Synthetic data from TinyStories')
