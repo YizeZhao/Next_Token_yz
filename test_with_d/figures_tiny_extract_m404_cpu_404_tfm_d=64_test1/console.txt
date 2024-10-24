@@ -1,0 +1,126 @@
+Dataset m: 403
+Dataset n: 5110
+Dataset entropy: 1.6156
+Next Token vocab size: 104
+Initializing a new transformer model from scratch
+0 | loss 4.6528 | entropy 1.6156 
+1 | loss 4.6235 | entropy 1.6156 
+10 | loss 4.4094 | entropy 1.6156 
+100 | loss 3.6823 | entropy 1.6156 
+1000 | loss 1.8282 | entropy 1.6156 
+2000 | loss 1.6647 | entropy 1.6156 
+3000 | loss 1.6337 | entropy 1.6156 
+4000 | loss 1.6241 | entropy 1.6156 
+5000 | loss 1.6200 | entropy 1.6156 
+6000 | loss 1.6188 | entropy 1.6156 
+7000 | loss 1.6179 | entropy 1.6156 
+8000 | loss 1.6172 | entropy 1.6156 
+9000 | loss 1.6167 | entropy 1.6156 
+10000 | loss 1.6163 | entropy 1.6156 
+11000 | loss 1.6162 | entropy 1.6156 
+12000 | loss 1.6161 | entropy 1.6156 
+13000 | loss 1.6160 | entropy 1.6156 
+14000 | loss 1.6159 | entropy 1.6156 
+15000 | loss 1.6158 | entropy 1.6156 
+16000 | loss 1.6158 | entropy 1.6156 
+17000 | loss 1.6158 | entropy 1.6156 
+18000 | loss 1.6158 | entropy 1.6156 
+19000 | loss 1.6157 | entropy 1.6156 
+20000 | loss 1.6157 | entropy 1.6156 
+21000 | loss 1.6157 | entropy 1.6156 
+22000 | loss 1.6157 | entropy 1.6156 
+23000 | loss 1.6157 | entropy 1.6156 
+24000 | loss 1.6157 | entropy 1.6156 
+25000 | loss 1.6157 | entropy 1.6156 
+26000 | loss 1.6157 | entropy 1.6156 
+27000 | loss 1.6157 | entropy 1.6156 
+28000 | loss 1.6157 | entropy 1.6156 
+29000 | loss 1.6157 | entropy 1.6156 
+saved in ./test_with_d/figures_tiny_extract_m404_cpu_404_tfm_d=64_test1/CEloss4 layer Transformer pos offs_3
+Computing Lmm with cvxpy
+===============================================================================
+                                     CVXPY
+                                     v1.5.3
+===============================================================================
+(CVXPY) Oct 21 04:46:34 PM: Your problem has 41912 variables, 41509 constraints, and 0 parameters.
+(CVXPY) Oct 21 04:46:36 PM: It is compliant with the following grammars: DCP, DQCP
+(CVXPY) Oct 21 04:46:36 PM: (If you need to solve this problem multiple times, but with different data, consider using parameters.)
+(CVXPY) Oct 21 04:46:36 PM: CVXPY will first compile your problem; then, it will invoke a numerical solver to obtain a solution.
+(CVXPY) Oct 21 04:46:36 PM: Your problem is compiled with the CPP canonicalization backend.
+-------------------------------------------------------------------------------
+                                  Compilation
+-------------------------------------------------------------------------------
+(CVXPY) Oct 21 04:46:38 PM: Compiling problem (target solver=SCS).
+(CVXPY) Oct 21 04:46:38 PM: Reduction chain: Dcp2Cone -> CvxAttr2Constr -> ConeMatrixStuffing -> SCS
+(CVXPY) Oct 21 04:46:38 PM: Applying reduction Dcp2Cone
+(CVXPY) Oct 21 04:46:41 PM: Applying reduction CvxAttr2Constr
+(CVXPY) Oct 21 04:46:44 PM: Applying reduction ConeMatrixStuffing
+(CVXPY) Oct 21 04:48:10 PM: Applying reduction SCS
+(CVXPY) Oct 21 04:48:17 PM: Finished problem compilation (took 1.006e+02 seconds).
+-------------------------------------------------------------------------------
+                                Numerical solver
+-------------------------------------------------------------------------------
+(CVXPY) Oct 21 04:48:17 PM: Invoking solver SCS  to obtain a solution.
+------------------------------------------------------------------
+               SCS v3.2.7 - Splitting Conic Solver
+        (c) Brendan O'Donoghue, Stanford University, 2012
+------------------------------------------------------------------
+problem:  variables n: 128778, constraints m: 170287
+cones:    z: primal zero / dual free vars: 1631
+          l: linear vars: 39878
+          s: psd vars: 128778, ssize: 1
+settings: eps_abs: 1.0e-10, eps_rel: 1.0e-05, eps_infeas: 1.0e-07
+          alpha: 1.50, scale: 1.00e-01, adaptive_scale: 1
+          max_iters: 100000, normalize: 1, rho_x: 1.00e-06
+          acceleration_lookback: 10, acceleration_interval: 10
+lin-sys:  sparse-direct-amd-qdldl
+          nnz(A): 211796, nnz(P): 0
+------------------------------------------------------------------
+ iter | pri res | dua res |   gap   |   obj   |  scale  | time (s)
+------------------------------------------------------------------
+     0| 1.76e+01  7.46e-01  4.09e+03 -1.54e+03  1.00e-01  5.97e-01 
+   175| 4.17e-06  4.32e-06  3.36e-05  1.98e+02  1.00e-01  7.78e+01 
+------------------------------------------------------------------
+status:  solved
+timings: total: 7.78e+01s = setup: 1.72e-01s + solve: 7.77e+01s
+         lin-sys: 8.75e-01s, cones: 7.63e+01s, accel: 1.01e-01s
+------------------------------------------------------------------
+objective = 197.881319
+------------------------------------------------------------------
+-------------------------------------------------------------------------------
+                                    Summary
+-------------------------------------------------------------------------------
+(CVXPY) Oct 21 04:49:35 PM: Problem status: optimal
+(CVXPY) Oct 21 04:49:35 PM: Optimal value: 1.979e+02
+(CVXPY) Oct 21 04:49:35 PM: Compilation took 1.006e+02 seconds
+(CVXPY) Oct 21 04:49:35 PM: Solver (including time spent in interface) took 7.784e+01 seconds
+computing Lmm in SVM the sol
+L_train_L_fin_norm_ratio: [1.18999456 1.18860309 1.14953225 1.03356731 0.99928224 0.9987675
+ 0.99885669 0.99899378 0.99910592 0.99914952 0.99920189 0.99925575
+ 0.99931052 0.99935912 0.99938033 0.99940663 0.99943475 0.99946282
+ 0.9994896  0.99950141 0.99951598 0.99953137 0.99954622 0.99956057
+ 0.99956672 0.99957382 0.9995811  0.99958823 0.99959497 0.99959789
+ 0.99960103 0.99960429 0.9996074 ]
+L fin norm: 21.154066218014787
+L list norm: [ 32.676132  32.749775  36.67421   75.37754  297.49423  374.55304
+ 424.55524  463.26788  496.45908  510.46582  527.7931   547.3434
+ 568.6231   590.4054   600.65643  613.9002   629.0912   645.32025
+ 662.0668   669.8853   679.8588   690.91144  702.205    713.614
+ 718.61475  724.5515   730.84717  737.1498   743.34406  745.9778
+ 748.9043   751.9542   755.029   ]
+(33, 403, 104) (403, 104)
+(33, 403, 104) (403, 104)
+computing grams for Lmm cvxpy
+Rank of Lmm: 31
+rank of Lmm by singular values: 30
+computing grams for Lmm thm
+Rank of Lmm: 31
+rank of Lmm by singular values: 31
+nuclear norm of Lmm_thm: 199.14131405664028
+nuclear norm of Lmm_cvxpy: 197.88128692570675
+nuclear norm of trained L: 2795.47705078125
+cvxpy and thm L_mm diff for tiny_extract_m404: 7.320358811815895
+cvxpy and thm L_mm normed diff for tiny_extract_m404: 0.1631453227756176
+np.mean(np.abs(L_mm_cvxpy - L_mm_thm)) : 0.013324025988158501
+(33, 403, 104) (403, 104)
+(33, 403, 104) (403, 104)

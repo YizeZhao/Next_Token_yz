@@ -50,11 +50,11 @@ dataset_name = "tiny_extract_m404"
 #dataset_name = "verysmallset"
 
 
-traininf_tag = "_cpu_404_lstm_test1"
+traininf_tag = "_cpu_404_tfm_d=32_epoch50k_test5"
 # dataset_name = "tiny_extracted_m100"
 tok_file = f'./data/{dataset_name}_pretok_word.bin'
 # record_dir = "/Users/yizezhao/Documents/Models/NextToken"
-record_dir = "./cpu_results"
+record_dir = "./test_with_d"
 # record_dir = "/Users/yizezhao/Desktop/ExpPaperV1"
 if dataset_name == "verysmallset":
     s_len = 3
@@ -84,15 +84,15 @@ bos = 1
 eos = 2
 
 # model
-init_from = "lstm" # mlp, tfm ufm, or lstm
+init_from = "tfm" # mlp, tfm ufm, or lstm
 
 # mlp specific
 d_encode = 128
 d_hidden = [128]
-d_decode = 128
+d_decode = 32
 
 # tfm specific
-dim = 128
+dim = 32
 n_layers = 4
 n_heads = 6
 n_kv_heads = 6
@@ -108,7 +108,7 @@ max_seq_len = 6
 lr = 1e-4
 lammy = 1e-6
 #training
-max_iteration = 30000
+max_iteration = 50000
 log_interval = 1000
 
 # if solve_by_cvx:
