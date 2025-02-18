@@ -23,6 +23,7 @@ To train the tokenizer, run the `Dataset.py` script. This script will handle the
    python Dataset.py
    ```
    This will train the tokenizer and save the model in the `./tokenizer` directory.
+   The tokenized file will also be saved in the same directory.
 
 ## Model Training
 To train the model, you can use the `train.py` script. This script will utilize the pre-tokenized data to train a language model.
@@ -35,14 +36,15 @@ To train the model, you can use the `train.py` script. This script will utilize 
    ```
    This will start the training process using the specified configuration.
 
-## Visualization
-To create all visualizations, run the `paperallplot.py` script. This script will generate the necessary plots and save them in the `./plots` directory.
+## Training Results
+After training, you should get a `result` directory containing the outputs of the training process.
 
-### Steps:
-1. Ensure all necessary data files are available in the `./data` directory.
-2. Run the following command to generate the visualizations:
-   ```bash
-   python paperallplot.py
-   ```
-   This will create the visualizations and save them in the `./plots` directory.
+## Customizing Visualizations
+To generate plots for a specific training session, change the directory path in the `paperallplot.py` script to point to the desired `result` directory.
+
+## Pretrained Tokenizers
+Pretrained tokenizers on two synthetic datasets are available in the `./tokenizers` directory.
+
+## Pre-tokenized Datasets
+Pre-tokenized datasets are available in the `./data` directory.
 
